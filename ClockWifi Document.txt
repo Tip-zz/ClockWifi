@@ -1,0 +1,51 @@
+23-Apr-2023
+Tip Partridge
+
+Readme file for ClockWifi.ini program.
+
+ClockWifi is a companion program for DeskClock and WallClock. It provides a Wifi interface that allows remote telnet access to the Clock's menu and provides a connetion to an internet NTP time server to update the clock's RTC.  When a telnet connection is establish with ClockWifi the connection is routed to the clock (via I2C) so the clock may be remotely controlled. The telnet connection is (mostly) identical to the clock's USB serial interface.
+
+ClocWifi also features a USB serial connection, 115200 Baud 8DNP1S, to access a menu to configure the network parameters. Parameters are stored in "EEPROM" and loaded on startup.
+
+Code was developed on Arduino IDE 1.8.19
+Target board is a NodeMCU ESP8266.
+
+Note: This program is not very mature and I haven't done much exception handling testing, so it might require an occasional power cycle to keep it running.  Fortunately the Clock has a battery backed up RTC, so power cycle is no big deal!
+
+This is the menu of commands:
+
+? for menu
+
+ClockWifi V0.33
+===TIME===========================================================
+ T   display date & Time
+===PARAMETERS=====================================================
+ P  display all Parameters        D  display default parameters
+ R  Restart                      ^D  load all params with Defaults
+===EDIT PARAMETERS================================================
+ N  Set Network params    W  Set Wifi params    S  Set Time Server
+
+Command descriptions:
+
+ T - Contacts the NPT server and displays current date and time.
+ P - Display all editable Parameters
+ D - Display the parameters defaults.
+^D - Loads all parameters with the Default values. You will then need to edit parameters.
+ R - Restarts the ESP. You have to do this after editing parameters to apply them.
+ N - Edits Network parameters. ClockWifi uses a fixed IP address.
+     Primary DNS is required to connect with NTP.
+ W - Edits Wifi parameters SSID and password.
+ S - Edits Time parameters. NPT Server specifies the primary server.
+     If connection fails the time.apple.com and time.windows.com will also
+     be tried.
+     The Time Zone is a POSIX style TZ string and can include the zone
+     as well as daylight savings details.
+
+When ClockWifi starts you have a short time window during which you can
+pess a key to skip the program setup code. You will want to do this if
+the program crashes on startup. Then you would edit parameters or press
+<Ctrl>+D to load defaults.
+
+See https://github.com/Tip-zz/ClockWifi for ClockWifi code.
+See https://github.com/Tip-zz/DeskClock for DeskClock code.
+See https://imgur.com/a/GeHdwdC for photos and schematic.
