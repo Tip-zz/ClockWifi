@@ -38,6 +38,7 @@ void setupTelnet() {
   if (telnet.begin(port)) 
     {
     Serial.println("running");
+    telnetStarted = true;
     } 
   else 
     {
@@ -49,11 +50,15 @@ void setupTelnet() {
 /* ------------------------------------------------- */
 
 /* ================================================= */
+// telnet receive interrupt service routine
+//    get string from wifi
+//    put first character into global char Telnet_c
+//    set global flag bool gotTelnet if character isn't a null
 void onTelnetInputReceived(String str)
   {
 //  Serial.print(str);
-  Wifi_c = str[0];
-  if (Wifi_c != 0) gotWifi = true;
+  Telnet_c = str[0];                    // get first character
+  if (Telnet_c != 0) gotTelnet = true;  // set flag if it's not a null
   }
 /* ================================================= */
 

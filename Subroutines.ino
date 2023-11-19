@@ -56,9 +56,9 @@ int getStr( char * str, int maxLen, int mode, const unsigned long timeout)
       }
     else if ((c == bs || c == del) && cpnt > 0)
       {
-      Serial.print( bs);
+      Serial.write( bs);
       Serial.print( ' ');
-      Serial.print( bs);
+      Serial.write( bs);
       cpnt -= 1;
       }
     else if (c == ctrlz || c == esc)

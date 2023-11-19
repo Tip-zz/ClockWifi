@@ -6,11 +6,17 @@
      WiFi setup. Part of ClockWiFi
 */
 
-// *************************************************
+//******************************************************
+// isConnected - Return Wifi status
+//******************************************************
 
 bool isConnected() {
   return (WiFi.status() == WL_CONNECTED);
 }
+
+//******************************************************
+// WiFiSetup - Connect to Wifi
+//******************************************************
 
 void WiFiSetup()   // common routine
 {
@@ -21,7 +27,7 @@ void WiFiSetup()   // common routine
   int i = 0;
   WiFi.mode(WIFI_STA);
   WiFi.forceSleepWake();  // likely don't need this
-  delay(200);
+  delay(300);
 
   if (!WiFi.config(Net.Ip, Net.Gateway, Net.Subnet, Net.DNS1))  // Need primaryDNS for NTP
     {
@@ -33,6 +39,7 @@ void WiFiSetup()   // common routine
     delay(pause);
     Serial.print(".");
   } while (i++ < max_tries && !isConnected());
+
   WiFi.setAutoReconnect(true);
   WiFi.persistent(true);
 

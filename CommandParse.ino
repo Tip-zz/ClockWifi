@@ -14,6 +14,24 @@ void     serialParse()
   
   switch(C)
     {
+    case 'A': //  A Display debug information
+              if (isConnected()) Serial.println("Connected");
+              else Serial.println("Not connected");
+              break;
+    case 'B': // Break Wifi
+           ///   WiFi.config(Net.Ip, Net.Subnet, Net.Gateway, Net.DNS1);
+              WiFi.begin( Wifi.Pw, Wifi.Ssid);
+              break;
+    case 'C': // Fix Wifi
+              WiFi.begin(Wifi.Ssid, Wifi.Pw);
+           ///   WiFi.config(Net.Ip, Net.Gateway, Net.Subnet, Net.DNS1);
+              break;
+    case 'E': // Set funky time
+              if (DateTime.setTime(315576000, false))    // bool setTime(const time_t timeSecs, bool forceSet = false);
+                Serial.println("Valid bogus time set");
+              else
+                Serial.println("Inalid bogus time set");
+              break;
     case 'D': //  D  display default parameters
               Serial.println("Default Parameters");
               Serial.print  ("==================");
@@ -49,8 +67,13 @@ void     serialParse()
                 Serial.println();
                 Serial.println("Parameters Updated:");
                 shoNet();
+                WiFiSetup();                    // Try to connect
                 }
-              else {Serial.println("No change.");}
+              else 
+                {
+                Serial.println("No change.");
+                getE2P();   // restore parameters from EEPROM
+                }
               break;
     case 'P': //  P  display all Parameters
               Serial.println("Global Parameters");
@@ -81,8 +104,13 @@ void     serialParse()
                 Serial.println();
                 Serial.println("Parameters Updated:");
                 shoNTP();
+                setupDateTime();                // Try to start
                 }
-              else {Serial.println("No change.");}
+              else 
+                {
+                Serial.println("No change.");
+                getE2P();   // restore parameters from EEPROM
+                }
               break;
     case 'T': //  T   display date & Time
               Serial.println(DateTime.toString());
@@ -104,8 +132,13 @@ void     serialParse()
                 Serial.println();
                 Serial.println("Parameters Updated:");
                 shoWifi();
+                WiFiSetup();              // Try to connect
                 }
-              else {Serial.println("No change.");}
+              else 
+                {
+                Serial.println("No change.");
+                getE2P();   // restore parameters from EEPROM
+                }
               break;
     case 4:   // ^D   Load parameters with defaults
               Serial.print("Loading default global parameters...");
@@ -123,6 +156,10 @@ void     serialParse()
               Serial.println(" R  Restart                      ^D  load all params with Defaults");
               Serial.println("===EDIT PARAMETERS================================================");
               Serial.println(" N  Set Network params    W  Set Wifi params    S  Set Time Server");
+              Serial.println(" A - Display debug information");
+              Serial.println(" B - Break Wifi");
+              Serial.println(" C - Fix Wifi");
+              Serial.println(" E - Set bogus time");
               break;
     }
   }
