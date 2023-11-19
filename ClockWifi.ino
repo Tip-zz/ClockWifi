@@ -34,12 +34,14 @@
       2023-04-12 (TEP) v0.31 Add NTP tme service
                  (TEP) v0.32 Add null termination for all EEPROM strings.
       2023-04-23 (TEP) v0.33 Code cleanup.
+      2023-09-18 (TEP) v-.34 WIP - Fix backspace in getStr. Check connections periodically and restore if needed.
+                       Add status and version to I2C special commands.
 */
 
 //*******************************************************
 //* Declarations *****************************************
 //*******************************************************
-const char verstr[] = "ClockWifi V0.33";
+const char verstr[] = "ClockWifi V0.34b";
 
 #include <Arduino.h>
 
@@ -50,11 +52,13 @@ const char verstr[] = "ClockWifi V0.33";
 // Telnet
 #include "ESPTelnet.h"          
 ESPTelnet telnet;
-volatile bool gotWifi;
-volatile char Wifi_c;
+volatile bool gotTelnet;  // character revceived from telnet
+volatile char Telnet_c;   // first character reeived
+bool telnetStarted = false;  // set true once Telnet has ben started
 
 // NTP
 #include "ESPDateTime.h"
+bool clockStarted = false;  // set true once NTP has been contacted and ESP internal clock is set
 
 // Network
 #include "clock_config.h"   // defaults
@@ -82,6 +86,7 @@ NTPParams NTP;
 
 // I2C
 #include <Wire.h>
+#define i2RcvMax 21               // Size of client's I2C receive buffer
 
 // ***** EEPROM Stuff ************************************************
 #include <EEPROM.h>
@@ -131,8 +136,10 @@ volatile byte I2C_ptr;
 // Local command parser
 char c, C;          // USB command, C forced to upper case
 char w;             // Wifi command
-bool gotc;          // Flags that character has been received from Wifi
 uint8_t datLen;     // Wifi data length
+unsigned long netCheckTime;                    // next millis to check and maybe restart wifi/telnet/ntp.
+const unsigned long netCheckInterval = 60000;  // check every minute
+
 
 // **************** SSSS **** EEEEEE *** TTTTTTTT *** UU   UU *** PPPPP ***********
 // *************** SS ******* EE *********  TT ****** UU   UU *** PP   PP *********
@@ -144,6 +151,7 @@ void setup()
 {
   EEPROM.begin(EESize);   // define EEPROM
   unsigned long bailTimer;
+
 // ***** Init USB serial and say Hi *****************************
   Serial.begin(115200);
   while (!Serial) { }
@@ -187,14 +195,17 @@ void setup()
   pinMode( reqPin, INPUT);
 
 // ***** Wifi Setup ******************************************
-  WiFiSetup();
+  WiFiSetup();  // if this works then isConnected() returns true
 
-// ***** NPT Setup ******************************************
-  if (isConnected()) setupDateTime();
+// ***** NTP Setup ******************************************
+  if (isConnected()) setupDateTime();   // clockStarted set to true if succeeesul.
 
-// ***** NPT Setup ******************************************
-  if (isConnected()) setupTelnet();   // Telnet configuration
-
+// ***** Telenet Setup ******************************************
+  if (isConnected()) setupTelnet();   // Telnet configuration.  If this fails it forces reboot.
+                                      // telnetStarted set to true if succeeesul.
+// ***** network check timer
+  netCheckTime = millis();
+  
 // ***** Prompt *********************************************
   Serial.println("Press ? for menu.");
 }
@@ -207,12 +218,35 @@ void setup()
 
 void loop()
 {
+  telnet.loop();  // not sure what this does, but seems essential to have it in the loop.
+//
+// ===== Check net status ===============================
+//
+  if (millis() - netCheckTime >= netCheckInterval)
+    {
+    netCheckTime = millis();              // Reset timer
+    if (!isConnected())                   // wifi not connected
+      {
+      Serial.println("Wifi not connected, connecting..");
+      delay(10);
+      WiFiSetup();                          // Try to connect
+      }
+    if (isConnected() && !clockStarted)   // NTP/ESP clock not started
+      {
+      Serial.println("Clock not started, starting..");
+      delay(10);
+      setupDateTime();                      // Try to start
+      }
+    if (isConnected() && !telnetStarted)  // Telnet not started
+      {
+      Serial.println("Telnet not started, starting..");
+      delay(10);
+      setupTelnet();                        // Try to start, if this fails it forces reboot.
+      }
+    }
 //
 // ===== Get a character ===============================
 //
-
-  telnet.loop();  // not sure what this does, but seems essential to have it in the loop.
-
 // Check USB
   if (Serial.available())
     {
@@ -222,44 +256,51 @@ void loop()
     }
 
 // Check WIFI
-  gotc = false;  // none yet
-  if (gotWifi)
+  if (gotTelnet)
     {
-    gotWifi = false;
-    gotc = true;
-    w = Wifi_c;
-    }
-//
-// ===== Parse Wifi character ===============================
-//
-// Check if we have received a new command
-  if (gotc)
-    {
-    Wire.beginTransmission(ClientID);
+    gotTelnet = false;
+    w = Telnet_c;
+// Send wifi character to I2C client
+    Wire.beginTransmission(ClientID);   // send to client
     Wire.write(w);
-    Wire.endTransmission();        // default releases bus
-    gotc = false;
+    Wire.endTransmission();             // default releases bus
     }
-// Check if client has data
-if (digitalRead( reqPin))
-  {
-  Wire.requestFrom(ClientID, (uint8_t)1); // request & read 1 byte data size from slave 
-  while(Wire.available())
+
+//
+// ===== Process I2C ===============================
+//
+  if (digitalRead( reqPin))   // client wants to send data
     {
-    datLen = Wire.read(); // Number of bytes client wants to send
-    }
-  if (datLen == 0xff) {sendTime();}
-  else
-    {
-    if (datLen > 32) datLen = 32;
-    Wire.requestFrom(ClientID, datLen); // request & read size bute data from slave
+// Request byte from client, this could be byte count of special code
+    Wire.requestFrom(ClientID, (uint8_t)1); // request & read 1 byte data size from slave 
     while(Wire.available())
+      datLen = Wire.read(); // Number of bytes client wants to send or command code
+// Decode byte
+    switch (datLen)
       {
-      char x = Wire.read();
-      telnet.print(x);
-      }
+      case 0xff:
+// Special code to request date/time
+        if (clockStarted && isConnected()) {sendTime();}   // send time to I2C client if clock has been set
+        break;
+      case 0xfe:
+// Special code to request status
+        sendStatus();                     // send status to I2C client
+        break;
+      case 0xfd:
+// Special code to request program version
+        sendVersion();                    // send version to I2C client
+        break;
+      default:
+// Receive data from I2C, send to wifi
+      if (datLen > 32) datLen = 32;
+      Wire.requestFrom(ClientID, datLen); // request & read size byte data from slave
+      while(Wire.available())
+        {
+        char x = Wire.read();
+        telnet.print(x);
+        }
+      } // end switch
     }
-  }
 } // End of Loop
 
 //********************************************************************************
@@ -288,6 +329,34 @@ void sendTime()
     {
     Wire.write(datTim[i]);
     }
+  Wire.endTransmission();        // default releases bus
+  }
+
+//***** Send status ***********************************************
+
+void sendStatus()
+  {
+  bool isConn = isConnected();
+  Wire.beginTransmission(ClientID);
+  Wire.write(isConn);
+  Wire.write(clockStarted);
+  Wire.write(telnetStarted);
+  Wire.endTransmission();        // default releases bus
+  }
+
+//***** Send version ***********************************************
+
+void sendVersion()
+  {
+  int i;
+  int l = strlen(verstr);
+  if (l > (i2RcvMax-1)) l = i2RcvMax-1;   // truncate if too long
+  Wire.beginTransmission(ClientID);
+  for (i=0; i<l; i++)
+    {
+    Wire.write(verstr[i]);
+    }
+  Wire.write(0);
   Wire.endTransmission();        // default releases bus
   }
 
